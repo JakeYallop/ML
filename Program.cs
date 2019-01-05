@@ -68,9 +68,9 @@ namespace ML_Relu
             //List starting parameters
             Console.WriteLine("Starting Parameters: ");
             Console.WriteLine("weightsZeroToOne: ");
-            Console.WriteLine(weightsZeroToOne.ToMatrixString());
+            Console.WriteLine(weightsZeroToOne);
             Console.WriteLine("WeightsOneToTwo: ");
-            Console.WriteLine(weightsOneToTwo.ToMatrixString());
+            Console.WriteLine(weightsOneToTwo);
             
             for (int i = 0; i < iterations; i++)
             {
