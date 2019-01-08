@@ -1,13 +1,17 @@
-﻿using MathNet.Numerics.Distributions;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using MathNet.Numerics.Distributions;
 using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.LinearAlgebra.Double;
-using System;
 
-namespace ML_Relu
+namespace ER_Inbound_Calls_Prediction
 {
     public static class MatrixUtils
     {
-        public static Matrix<double> StackMatrix(this Matrix<double> m, int n)
+        public static Matrix<double> StackSelf(this Matrix<double> m, int n)
         {
             Matrix<double> final = m;
             for (int i = 0; i < n - 1; i++)
@@ -18,94 +22,56 @@ namespace ML_Relu
         }
 
     }
-
     class Program
     {
-
-        public static double ComputeError(double prediction, double goal) => Math.Pow(goal - prediction, 2);
-        public static void LogPrediction(double prediction, double error) => Console.WriteLine("Error: " + error.ToString("N8") + " Prediction: " + prediction.ToString("N8"));
+        public static void LogPrediction(double pred, double error) => Console.WriteLine("Prediction: {0} Error: {1}", pred.ToString("N8"), error.ToString("N8"));
         public static double Relu(double input) => input > 0 ? input : 0;
-        public static double ReluToDeriv(double input) => input > 0 ? 1 : 0;
+        public static double Relu2Deriv(double input) => input > 0 ? 1 : 0;
 
-        public static Matrix<double> weightsZeroToOne;
-        public static Matrix<double> weightsOneToTwo;
+    
+        public static MatrixBuilder<double> M = Matrix.Build;
+        public static VectorBuilder<double> V = Vector.Build;
 
-        public static void Predict(double[] streetlight, double correctAnswer)
-        {
-            Vector<double> layerZero = Vector.Build.DenseOfArray(streetlight);
-            Vector<double> layerOne = weightsZeroToOne.LeftMultiply(layerZero);
-            layerOne.CoerceZero(a => a < 0);
-            double pred = weightsOneToTwo.LeftMultiply(layerOne).Sum();
+        public const double Alpha = 0.1;
+        public const int HiddenNodes = 8;
+        public const int OutputNodes = 1;
+        public const int InputNodes = 3;
 
-            Console.WriteLine("Predicted Value: " + pred.ToString("N6") + " Mean-Squared error: " + ComputeError(pred, correctAnswer).ToString("N6"));
-        }
+        public static Matrix<double> TestData = M.DenseOfRowArrays(new double[] { 1, 0, 1 }, new double[] { 0, 1, 1 }, new double[] { 1, 1, 1 }, new double[] { 0, 0, 1 });
+        public static Vector<double> Correct = V.DenseOfArray(new double[] { 1, 1, 0, 0 });
 
+        public const int Iterations = 500;
         static void Main(string[] args)
         {
-            double prediction = 0;
-            double goal = 0;
-            double alpha = 0.2;
-            int hiddenSize = 4;
-            int numberOfInputs = 3;
-            int iterations = 100;
+            Matrix<double> w0 = M.Random(InputNodes, HiddenNodes, new ContinuousUniform());
+            Matrix<double> w1 = M.Random(HiddenNodes, OutputNodes, new ContinuousUniform());
 
-            //Generate random weights
-            weightsZeroToOne = DenseMatrix.Build.Random(3, hiddenSize, new ContinuousUniform()); //From layer 0 (3 inputs) to layer 1 (hiddenSize inputs)
-            weightsOneToTwo = DenseMatrix.Build.Random(hiddenSize, 1, new ContinuousUniform()); //From layer 1 (hiddenSize inputs) to layer 2 (1 output)
+            int iterCount = 0;
 
-            //Data (layer 0)
-            Matrix<double> streetlightData = DenseMatrix.Build.DenseOfRowArrays(new double[][] {
-              new double[] { 1, 0, 1 },
-              new double[] { 0, 1, 1 },
-              new double[] { 0, 0, 1 },
-              new double[] { 1, 1, 1 },
-            });
-
-            //Correct Predictions
-            double[] correctPredictions = { 1, 1, 0, 0 };
-
-            Console.WriteLine("Running for {0} iterations", iterations);
-            //List starting parameters
-            Console.WriteLine("Starting Parameters: ");
-            Console.WriteLine("weightsZeroToOne: ");
-            Console.WriteLine(weightsZeroToOne);
-            Console.WriteLine("WeightsOneToTwo: ");
-            Console.WriteLine(weightsOneToTwo);
-            
-            for (int i = 0; i < iterations; i++)
+            for (int i = 0; i < Iterations; i++)
             {
-                for (int j = 0; j < streetlightData.RowCount; j++)
+                iterCount++;
+                for (int j = 0; j < TestData.RowCount; j++)
                 {
-                    goal = correctPredictions[j];
-                    Vector<double> layerZero = streetlightData.Row(j);
-                    Vector<double> layerOne = weightsZeroToOne.LeftMultiply(layerZero);
-                    layerOne.CoerceZero(a => a < 0);
-
-                    double layerTwo = weightsOneToTwo.LeftMultiply(layerOne).Sum();
-                    double layerTwoDelta = (goal - layerTwo);
-
-                    Matrix<double> layerOneDelta = weightsOneToTwo.Multiply(layerTwoDelta).Map2((a, b) => a * ReluToDeriv(b), Matrix.Build.DenseOfColumnVectors(layerOne));
-
-                    //Create a 3x4 matrix from layer 1 (originally 1x4 -> stack rows 3 times)
-                    Matrix<double> m = layerOneDelta.Transpose().StackMatrix(3);
-                    //Create 3x4 matrix from layer 0 (originally 1x3 -> stack rows 4 times and rotate from 4x3 to 3x4)
-                    Matrix<double> m2 = layerZero.ToRowMatrix().StackMatrix(4).Transpose();
-
-                    //Update weighting
-                    weightsZeroToOne = weightsZeroToOne.Add(m2.PointwiseMultiply(m).Multiply(alpha));
-                    //weightsOneToTwo is a 4x1 matrix, so converting layerOne (4-Double vector) to a column matrix results in a 4x1 matrix (which can then be multiplied and added)
-                    weightsOneToTwo = weightsOneToTwo.Add(layerOne.Multiply(layerTwoDelta).ToColumnMatrix() * alpha);
-
-                    prediction = layerTwo;
-                    LogPrediction(prediction, ComputeError(prediction, goal));
+                    //Forwards Propagation
+                    Vector<double> l0 = TestData.Row(j);
+                    Vector<double> l1 = w0.LeftMultiply(l0).Map(Relu);
+                    Vector<double> l2 = w1.LeftMultiply(l1);
+                    
+                    double goal = Correct[j];
+                    double prediction = l2.Sum();
+                    double error = Math.Pow(goal - prediction, 2);
+                    LogPrediction(prediction, error);
+                    
+                    //Backward Propagation
+                    //Calculate Delta at each layer
+                    Vector<double> l2Delta = V.Dense(1, goal - prediction);
+                    Vector<double> l1Delta = w1.Transpose().LeftMultiply(l2Delta).Map2((a, b) => a * Relu2Deriv(b), l1);
+                    //Update Weights
+                    w0 = w0.Add(l1Delta.ToRowMatrix().StackSelf(InputNodes).PointwiseMultiply(l0.ToRowMatrix().StackSelf(HiddenNodes).Transpose()).Multiply(Alpha));
+                    w1 = w1.Add(l1.Multiply(l2Delta.Sum()).Multiply(Alpha).ToColumnMatrix());
                 }
             }
-            Console.WriteLine("Training complete");
-            Console.WriteLine("--------------------------------");
-            Console.WriteLine();
-
-
-            Predict(new double[] { 1, 0, 1 }, 1);
             Console.ReadLine();
         }
     }
