@@ -64,7 +64,7 @@ namespace ER_Inbound_Calls_Prediction
                     LogPrediction(prediction, error);
                     
                     //Backward Propagation
-                    //Calculate Delta at each layer
+                    //Calculate delta at each layer
                     Vector<double> l2Delta = V.Dense(1, goal - prediction);
                     Vector<double> l1Delta = w1.Transpose().LeftMultiply(l2Delta).Map2((a, b) => a * Relu2Deriv(b), l1);
                     //Update Weights
